@@ -26,6 +26,14 @@ export interface MemoryConfig {
   embeddingProvider: string | null;
   embeddingModel: string;
   embeddingDims: number;
+  /**
+   * Task prefix prepended to the search query text before it is embedded (never stored).
+   * Asymmetric models such as `nomic-embed-text` require it; empty string disables it.
+   * When omitted in the config file, derived from `embeddingModel` (see `defaultEmbeddingPrefixes`).
+   */
+  embeddingQueryPrefix: string;
+  /** Task prefix prepended to the document text before it is embedded on save (never stored). */
+  embeddingDocumentPrefix: string;
   privacyPatterns: PrivacyPatternConfig[];
 }
 
@@ -60,6 +68,19 @@ export const DEFAULT_PRIVACY_PATTERNS: Array<{ name: string; pattern: string }> 
   },
 ];
 
+export const MAX_EMBEDDING_PREFIX_LENGTH = 200;
+
+/**
+ * Default task prefixes for a given embedding model. Only `nomic-embed-text` (any tag)
+ * uses the `search_query: `/`search_document: ` convention; for other models no prefix
+ * is applied unless configured explicitly, so their embeddings are not silently altered.
+ */
+export function defaultEmbeddingPrefixes(model: string): { query: string; document: string } {
+  return /^nomic-embed-text(?::|$)/i.test(model.trim())
+    ? { query: "search_query: ", document: "search_document: " }
+    : { query: "", document: "" };
+}
+
 export const DEFAULT_CONFIG: MemoryConfig = {
   enabled: true,
   dbPath: "~/.pi-memory/memory.db",
@@ -68,6 +89,8 @@ export const DEFAULT_CONFIG: MemoryConfig = {
   embeddingProvider: null,
   embeddingModel: "nomic-embed-text",
   embeddingDims: 768,
+  embeddingQueryPrefix: "search_query: ",
+  embeddingDocumentPrefix: "search_document: ",
   privacyPatterns: DEFAULT_PRIVACY_PATTERNS.map((p) => ({ ...p })),
 };
 
@@ -176,6 +199,16 @@ export function loadConfig(
   if ("embeddingDims" in user) {
     if (isPositiveInt(user.embeddingDims)) config.embeddingDims = user.embeddingDims;
     else invalid("embeddingDims");
+  }
+  // Prefixes not set explicitly follow the (possibly overridden) embedding model.
+  const modelPrefixes = defaultEmbeddingPrefixes(config.embeddingModel);
+  config.embeddingQueryPrefix = modelPrefixes.query;
+  config.embeddingDocumentPrefix = modelPrefixes.document;
+  for (const field of ["embeddingQueryPrefix", "embeddingDocumentPrefix"] as const) {
+    if (!(field in user)) continue;
+    const value = user[field];
+    if (typeof value === "string" && value.length <= MAX_EMBEDDING_PREFIX_LENGTH) config[field] = value;
+    else invalid(field);
   }
   if ("privacyPatterns" in user) {
     if (Array.isArray(user.privacyPatterns)) {

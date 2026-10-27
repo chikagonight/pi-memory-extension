@@ -58,6 +58,41 @@ describe("loadConfig", () => {
     expect(warnings).toHaveLength(1);
   });
 
+  it("embedding task prefixes: nomic defaults, derived from model, explicit override", () => {
+    expect(DEFAULT_CONFIG.embeddingQueryPrefix).toBe("search_query: ");
+    expect(DEFAULT_CONFIG.embeddingDocumentPrefix).toBe("search_document: ");
+
+    const missing = loadConfig(join(dir, "nope.json"), warn);
+    expect(missing.embeddingQueryPrefix).toBe("search_query: ");
+    expect(missing.embeddingDocumentPrefix).toBe("search_document: ");
+
+    const tagged = loadConfig(write(JSON.stringify({ embeddingModel: "nomic-embed-text:v1.5" })), warn);
+    expect(tagged.embeddingQueryPrefix).toBe("search_query: ");
+    expect(tagged.embeddingDocumentPrefix).toBe("search_document: ");
+
+    // Another model without explicit prefixes => no prefixes (do not alter its embeddings).
+    const other = loadConfig(write(JSON.stringify({ embeddingModel: "mxbai-embed-large" })), warn);
+    expect(other.embeddingQueryPrefix).toBe("");
+    expect(other.embeddingDocumentPrefix).toBe("");
+
+    const explicit = loadConfig(
+      write(JSON.stringify({ embeddingModel: "e5-large", embeddingQueryPrefix: "query: ", embeddingDocumentPrefix: "passage: " })),
+      warn,
+    );
+    expect(explicit.embeddingQueryPrefix).toBe("query: ");
+    expect(explicit.embeddingDocumentPrefix).toBe("passage: ");
+
+    const disabled = loadConfig(write(JSON.stringify({ embeddingQueryPrefix: "", embeddingDocumentPrefix: "" })), warn);
+    expect(disabled.embeddingQueryPrefix).toBe("");
+    expect(disabled.embeddingDocumentPrefix).toBe("");
+    expect(warnings).toHaveLength(0);
+
+    const invalid = loadConfig(write(JSON.stringify({ embeddingQueryPrefix: 42, embeddingDocumentPrefix: "x".repeat(500) })), warn);
+    expect(invalid.embeddingQueryPrefix).toBe("search_query: ");
+    expect(invalid.embeddingDocumentPrefix).toBe("search_document: ");
+    expect(warnings).toHaveLength(2);
+  });
+
   it("user privacyPatterns extend (do not replace) the defaults", () => {
     const config = loadConfig(write(JSON.stringify({ privacyPatterns: ["INT-[0-9]{4}"] })), warn);
     expect(config.privacyPatterns.length).toBe(DEFAULT_CONFIG.privacyPatterns.length + 1);

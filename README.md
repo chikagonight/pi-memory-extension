@@ -67,6 +67,10 @@
    { "embeddingProvider": "http://<your-ollama-host>:11434", "embeddingModel": "nomic-embed-text", "embeddingDims": 768 }
    ```
    Используется `POST <embeddingProvider>/api/embed`; размерность ответа должна совпадать с `embeddingDims`.
+   Перед отправкой в модель к тексту добавляются task-префиксы `embeddingQueryPrefix` (запрос поиска)
+   и `embeddingDocumentPrefix` (сохраняемая запись); в БД они не попадают. Если поля не заданы, для
+   `nomic-embed-text` используются `"search_query: "`/`"search_document: "`, для прочих моделей — `""`.
+   Изменение префиксов/модели делает старые embeddings несопоставимыми — такие записи стоит пересохранить.
 3. Проверить через `/memory` (строка `Embeddings: ... OK`).
 
 Если сервис недоступен, запись всё равно сохраняется (без embedding, находится keyword-поиском),

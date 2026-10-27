@@ -247,6 +247,34 @@ describe("memory service with embeddings (optional semantic mode)", () => {
     }
   });
 
+  it("adds task prefixes only to the text sent to the embeddings model, never to stored text/title", async () => {
+    const embed = fakeEmbed();
+    const memory = createMemoryService({ db, config: config({ embeddingProvider: "http://ollama" }), embed });
+    const saved = await memory.save({ text: "cats like boxes", title: "Cat facts" });
+    expect(embed).toHaveBeenLastCalledWith("search_document: cats like boxes", undefined);
+
+    await memory.search({ query: "kitten", mode: "semantic" });
+    expect(embed).toHaveBeenLastCalledWith("search_query: kitten", undefined);
+
+    expect(saved.text).toBe("cats like boxes");
+    expect(saved.title).toBe("Cat facts");
+    expect(dumpDb(db)).not.toContain("search_document:");
+    expect(dumpDb(db)).not.toContain("search_query:");
+  });
+
+  it("uses configured (possibly empty) embedding prefixes", async () => {
+    const embed = fakeEmbed();
+    const memory = createMemoryService({
+      db,
+      config: config({ embeddingProvider: "http://ollama", embeddingQueryPrefix: "", embeddingDocumentPrefix: "passage: " }),
+      embed,
+    });
+    await memory.save({ text: "dogs bark" });
+    expect(embed).toHaveBeenLastCalledWith("passage: dogs bark", undefined);
+    await memory.search({ query: "dogs", mode: "semantic" });
+    expect(embed).toHaveBeenLastCalledWith("dogs", undefined);
+  });
+
   it("still saves (embedding=null) when the embeddings provider fails", async () => {
     const embed = vi.fn(async () => {
       throw new Error("ollama down");

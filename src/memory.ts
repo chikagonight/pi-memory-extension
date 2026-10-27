@@ -112,7 +112,8 @@ export function createMemoryService(options: MemoryServiceOptions): MemoryServic
 
   async function embedQuery(query: string, signal?: AbortSignal): Promise<Float32Array> {
     // The query is sanitized too: secrets must not leave the process even in a search.
-    return embed!(sanitize(query, config.maxTextLength).text, signal);
+    // The task prefix (e.g. "search_query: ") is only for the embedding model.
+    return embed!(config.embeddingQueryPrefix + sanitize(query, config.maxTextLength).text, signal);
   }
 
   function keyword(query: string, limit: number, project?: string): SearchHit[] {
@@ -182,7 +183,8 @@ export function createMemoryService(options: MemoryServiceOptions): MemoryServic
       let embedding: Float32Array | null = null;
       if (embed) {
         try {
-          embedding = await embed(text.text, signal);
+          // The task prefix (e.g. "search_document: ") goes only to the embedding model, not to the DB.
+          embedding = await embed(config.embeddingDocumentPrefix + text.text, signal);
         } catch (error) {
           // Embeddings are optional: keep the entry, searchable by keyword.
           console.warn(`[pi-memory] embedding failed, saving without it: ${errorMessage(error)}`);
